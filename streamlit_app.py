@@ -7,7 +7,7 @@ from folium.plugins import FastMarkerCluster
 
 
 APP_TITLE = "UFO Sightings"
-APP_SUB_TITLE = "Source: Kaggle"
+APP_SUB_TITLE = "Source: https://www.kaggle.com/datasets/camnugent/ufo-sightings-around-the-world/data"
 
 @st.cache_resource
 def display_map(df):
