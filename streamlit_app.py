@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import FastMarkerCluster
@@ -8,22 +9,10 @@ from folium.plugins import FastMarkerCluster
 APP_TITLE = "UFO Sightings"
 APP_SUB_TITLE = "Source: Kaggle"
 
+@st.cache_resource
 def display_map(df):
 
     map = folium.Map(location=[0,0], scrollWheelZoom=True, zoom_start=2)
-
-    
-    
-    # for index, row in df.iterrows():
-
-    #     tooltip_text = f"Date: {row['Date_time']}<br>Shape: {row['UFO_shape']}<br>Duration: {row['length_of_encounter_seconds']}"
-
-    #     folium.Marker(
-    #         location=[row['latitude'], row['longitude']],
-    #         popup=f"Description: {row['description']}",
-    #         tooltip=tooltip_text,
-            
-    #     ).add_to(map)
 
     callback = ('function (row) {'
             'var marker = L.marker(new L.LatLng(row[0], row[1]), {color: "red"});'
@@ -38,27 +27,19 @@ def display_map(df):
             "var popup = L.popup({maxWidth: '300'});"
             "const display_text = {text: row[2]};"
             "var mytext = L.DomUtil.create('div', 'display_text');"
-            "mytext.textContent = display_text.text;"
+            "mytext.innerHTML = display_text.text;"
             "popup.setContent(mytext);"
             "marker.bindPopup(popup);"
             'return marker};')
 
-    map.add_child(FastMarkerCluster(df[['latitude', 'longitude', 'UFO_shape']].values.tolist(), callback=callback))
+    map.add_child(FastMarkerCluster(df[['latitude', 'longitude', 'Text']].values.tolist(), callback=callback))
 
-    st_map = st_folium(map, height=550, use_container_width=True)
+    st_map = st_folium(map, height=550, use_container_width=True, key='map')
 
 @st.cache_resource
 def get_data():
-    # Create a database session object that points to the URL.
-    return pd.read_csv("data/ufo_sighting_data.csv", low_memory=False)
 
-def main():
-    st.set_page_config(page_title=APP_TITLE, layout='wide')
-    st.title(APP_TITLE)
-    st.caption(APP_SUB_TITLE)
-
-    # Load data
-    df = get_data()
+    df = pd.read_csv("data/ufo_sighting_data.csv", low_memory=False)
 
     # Eliminate anomalous latiutude/longitude
     df = df.drop(df[pd.to_numeric(df['latitude'], errors='coerce').isna()].index).reset_index(drop=True)
@@ -71,23 +52,97 @@ def main():
     # Fixing datetime errors and extracting years
     df['Date_time'] = df['Date_time'].str.replace('24:00', '00:00')
     df['Date_time'] = pd.to_datetime(df['Date_time'], format='%m/%d/%Y %H:%M')
-    df['Years'] = df['Date_time'].dt.year
+    df['Year'] = df['Date_time'].dt.year
+    df['Month'] = df['Date_time'].dt.month
+    df['Hour'] = df['Date_time'].dt.hour
 
-    # Slice for testing sake
-    df = df[:1000]
+    # Apply the mapping function to create a 'Season' column
+    df['Season'] = df['Month'].apply(map_to_season)
+
+    # Rename columns using the .rename() method
+    df = df.rename(columns={'described_duration_of_encounter': 'Encounter_Duration', 'description': 'Description'})
+
+    # Add display text to dataframe
+    df['Text'] = df[['Year', 'Season', 'UFO_shape', 'Encounter_Duration', 'Description']].apply(custom_format, axis=1)
+
+    # Slice for testing purposes
+    # df = df[:1000]
+
+    return df
+
+@st.cache_resource
+def filter_data(df, range_years, ufo_option, season, range_hours):
+
+    df_slice = df.copy()
+
+    df_slice = df_slice.loc[
+        (df_slice['Year'] >= range_years[0]) & (df_slice['Year'] <= range_years[1]) & 
+        (df_slice['Hour'] >= range_hours[0]) & (df_slice['Hour'] <= range_hours[1])
+        ]
+
+    if len(ufo_option) > 0:
+        df_slice = df_slice.loc[df_slice['UFO_shape'].isin(ufo_option)]
+
+    if len(season) > 0:
+        df_slice = df_slice.loc[df_slice['Season'].isin(ufo_option)]
+    
+    return df_slice
+
+# Define a custom mapping function to categorize months into seasons
+def map_to_season(month):
+    if 3 <= month <= 5:
+        return 'Spring'
+    elif 6 <= month <= 8:
+        return 'Summer'
+    elif 9 <= month <= 11:
+        return 'Autumn'
+    else:
+        return 'Winter'
+    
+# Define a custom lambda function to join string columns into a multi-line string with custom formatting
+def custom_format(row):
+    entries = []
+    for column_name, value in row.items():
+        entries.append(f'{column_name}: {value}')
+    return '<br>'.join(entries)
+
+def main():
+    st.set_page_config(page_title=APP_TITLE, layout='wide', initial_sidebar_state='expanded')
+    st.title(APP_TITLE)
+    st.caption(APP_SUB_TITLE)
+
+    # Load data
+    df = get_data()
 
     # Define the range of years for the multi-slider
-    year_min = int(df['Years'].min())
-    year_max = int(df['Years'].max())
-    range_years = st.slider("Select Year Range", year_min, year_max, (year_min, year_max), 1)
+    year_min = int(df['Year'].min())
+    year_max = int(df['Year'].max())
+    range_years = st.sidebar.slider("Select Year Range", year_min, year_max, (year_min, year_max), 1)
 
-    # Filter years
-    df_slice = df.copy()
-    df_slice = df_slice.loc[(df_slice['Years'] >= range_years[0]) & (df_slice['Years'] <= range_years[1])]
+    # Define Hours Range
+    hour_min = int(df['Hour'].min())
+    hour_max = int(df['Hour'].max())
+    range_hours = st.sidebar.slider("Select Hour Range", hour_min, hour_max, (hour_min, hour_max), 1)
+
+    # Multi-Select UFO Shape
+    ufo_option = st.sidebar.multiselect(
+        label='Select UFO Shape', options=sorted([shape for shape in list(df['UFO_shape'].unique()) if shape is not np.nan])
+        )
+    
+    # Multi-Select Season
+    season = st.sidebar.multiselect(
+        label='Select Season', options=sorted([season for season in list(df['Season'].unique()) if season is not np.nan])
+        )
+
+    df_slice = filter_data(df, range_years, ufo_option, season, range_hours)
 
     display_map(df_slice)
 
-    st.dataframe(df_slice, use_container_width=True)
+    st.dataframe(df_slice[[col for col in df_slice if col not in ['Text']]], use_container_width=True)
+
+    st.sidebar.metric(
+        'Count Sightings', value=df_slice.shape[0]
+    )
 
 
 if __name__ == "__main__":
