@@ -140,6 +140,8 @@ def main():
         'Count Sightings', value=df_slice.shape[0]
     )
 
+    st.sidebar.write(f"[Buy me a coffee](https://www.buymeacoffee.com/jon.wright)")
+
     map = display_map(df_slice)
     st_map = st_folium(map, height=550, use_container_width=True, key='map')
 
