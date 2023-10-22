@@ -7,7 +7,7 @@ from folium.plugins import FastMarkerCluster
 
 
 APP_TITLE = "UFO Sightings"
-APP_SUB_TITLE = "Source: https://www.kaggle.com/datasets/camnugent/ufo-sightings-around-the-world/data"
+APP_SUB_TITLE = "Source: [Kaggle](https://www.kaggle.com/datasets/camnugent/ufo-sightings-around-the-world/data)"
 
 @st.cache_resource
 def display_map(df):
@@ -140,8 +140,8 @@ def main():
         'Count Sightings', value=df_slice.shape[0]
     )
 
-    st.sidebar.write(f"[Buy me a coffee](https://www.buymeacoffee.com/jon.wright)")
-    st.sidebar.write(f"[GitHub](https://github.com/jonwright13/ufo-sightings)")
+    st.sidebar.write("[Buy me a coffee](https://www.buymeacoffee.com/jon.wright)")
+    st.sidebar.write("[GitHub](https://github.com/jonwright13/ufo-sightings)")
 
     map = display_map(df_slice)
     st_map = st_folium(map, height=550, use_container_width=True, key='map')
