@@ -13,6 +13,7 @@ APP_SUB_TITLE = "Source: Kaggle"
 def display_map(df):
 
     map = folium.Map(location=[0,0], scrollWheelZoom=True, zoom_start=2)
+    
 
     callback = ('function (row) {'
             'var marker = L.marker(new L.LatLng(row[0], row[1]), {color: "red"});'
