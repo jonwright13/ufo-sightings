@@ -14,7 +14,6 @@ def display_map(df):
 
     map = folium.Map(location=[0,0], scrollWheelZoom=True, zoom_start=2)
     
-
     callback = ('function (row) {'
             'var marker = L.marker(new L.LatLng(row[0], row[1]), {color: "red"});'
             'var icon = L.AwesomeMarkers.icon({'
@@ -34,8 +33,8 @@ def display_map(df):
             'return marker};')
 
     map.add_child(FastMarkerCluster(df[['latitude', 'longitude', 'Text']].values.tolist(), callback=callback))
-
-    st_map = st_folium(map, height=550, use_container_width=True, key='map')
+    return map
+    
 
 @st.cache_resource
 def get_data():
@@ -137,13 +136,16 @@ def main():
 
     df_slice = filter_data(df, range_years, ufo_option, season, range_hours)
 
-    display_map(df_slice)
-
-    st.dataframe(df_slice[[col for col in df_slice if col not in ['Text']]], use_container_width=True)
-
     st.sidebar.metric(
         'Count Sightings', value=df_slice.shape[0]
     )
+
+    map = display_map(df_slice)
+    st_map = st_folium(map, height=550, use_container_width=True, key='map')
+
+    st.dataframe(df_slice[[col for col in df_slice if col not in ['Text']]], use_container_width=True)
+
+    
 
 
 if __name__ == "__main__":
