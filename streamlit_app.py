@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import sqlite3
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import FastMarkerCluster
-import sqlite3
-from datetime import datetime
 
 APP_TITLE = "UFO Sightings"
 APP_SUB_TITLE = "Source: [Kaggle](https://www.kaggle.com/datasets/camnugent/ufo-sightings-around-the-world/data)"
