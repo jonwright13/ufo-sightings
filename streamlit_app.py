@@ -15,7 +15,6 @@ choropleth_fill_colors = [
     'PuOr', 'PuRd', 'RdBu', 'RdGy', 'RdPu', 'RdYlBu', 'RdYlGn', 'Set1', 'Set2', 'Set3', 'Spectral', 'YlGn', 'YlGnBu', 'YlOrBr', 'YlOrRd'
     ]
 
-
 tiles = ["Default", "Choropleth"]
 
 hide_streamlit_style = """
