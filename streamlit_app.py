@@ -1,13 +1,22 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
-import folium
-from streamlit_folium import st_folium
-from folium.plugins import FastMarkerCluster
+
+from src.table_funcs import get_variables, filter_data, display_table, get_dependent_dropdowns, get_country_dropdowns
+from src.mapping import get_map
+from src.charts import ten_countries, ten_ufos, ufo_dist_by_season, season_pie_chart, bottom_ten_ufos
+
 
 APP_TITLE = "UFO Sightings"
 APP_SUB_TITLE = "Source: [Kaggle](https://www.kaggle.com/datasets/camnugent/ufo-sightings-around-the-world/data)"
 URL = 'data/ufo_sighting_data.db'
+
+choropleth_fill_colors = [
+    'Accent', 'BrBg', 'BuGn', 'BuPu', 'Dark2', 'GnBu', 'OrRd', 'PRGn', 'Paired', 'Pastel1', 'Pastel2', 'PiYG', 'PuBu', 'PuBuGn', 
+    'PuOr', 'PuRd', 'RdBu', 'RdGy', 'RdPu', 'RdYlBu', 'RdYlGn', 'Set1', 'Set2', 'Set3', 'Spectral', 'YlGn', 'YlGnBu', 'YlOrBr', 'YlOrRd'
+    ]
+
+
+tiles = ["Default", "Choropleth"]
 
 hide_streamlit_style = """
                 <style>
@@ -41,99 +50,6 @@ hide_streamlit_style = """
                 </style>
                 """
 
-@st.cache_resource(experimental_allow_widgets=True, show_spinner=False)
-def get_map(df):
-
-    # Create a Folium map object
-    map = folium.Map(location=[0,0], scrollWheelZoom=True, zoom_start=2)
-    
-    # JS Callback function with additional information for each marker created -> Namely, tooltip text
-    callback = ('function (row) {'
-            'var marker = L.marker(new L.LatLng(row[0], row[1]), {color: "red"});'
-            'var icon = L.AwesomeMarkers.icon({'
-            "icon: 'info-sign',"
-            "iconColor: 'white',"
-            "markerColor: 'green',"
-            "prefix: 'glyphicon',"
-            "extraClasses: 'fa-rotate-0'"
-            '});'
-            'marker.setIcon(icon);'
-            "var popup = L.popup({maxWidth: '300'});"
-            "const display_text = {text: row[2]};"
-            "var mytext = L.DomUtil.create('div', 'display_text');"
-            "mytext.innerHTML = display_text.text;"
-            "popup.setContent(mytext);"
-            "marker.bindPopup(popup);"
-            'return marker};')
-
-    # Add the markers to the map using the FastMarkerCluster plugin
-    map.add_child(FastMarkerCluster(df[['latitude', 'longitude', 'Text']].values.tolist(), callback=callback))
-
-    # Create the map on the streamlit app
-    st_folium(map, height=550, use_container_width=True, key='map')
-
-@st.cache_data
-def get_variables():
-
-    # Initialise the connection to the database and create a cursor object
-    db_connection = sqlite3.connect(URL)
-    cursor = db_connection.cursor()
-
-    # SQL query to fetch the min and max years
-    cursor.execute("SELECT MIN(Year) as min_value, MAX(Year) as max_value FROM sightings")
-    year_min, year_max = cursor.fetchone()
-
-    # SQL query to fetch the min and max hours
-    cursor.execute("SELECT MIN(Hour) as min_value, MAX(Hour) as max_value FROM sightings")
-    hour_min, hour_max = cursor.fetchone()
-
-    # SQL query to fetch a list of all distinct seasons
-    cursor.execute("SELECT DISTINCT(Season) FROM sightings")
-    seasons = sorted([season[0] for season in cursor.fetchall()])
-
-    # SQL query to fetch a list of all distinct ufo shapes
-    cursor.execute("SELECT DISTINCT(UFO_shape) FROM sightings")
-    ufo_shape = sorted([shape[0] for shape in cursor.fetchall() if shape[0] != None])
-
-    # Close the database connection
-    db_connection.close()
-
-    return year_min, year_max, hour_min, hour_max, seasons, ufo_shape
-
-@st.cache_data(show_spinner=False)
-def filter_data(range_years, ufo_option, season, range_hours):
-
-    # Initialise a database connection
-    db_connection = sqlite3.connect(URL)
-
-    # Query string for year and hour filtering
-    query = "SELECT * FROM sightings WHERE Year >= ? AND Year <= ? AND Hour >= ? AND Hour <= ?"
-    params = [range_years[0], range_years[1], range_hours[0], range_hours[1]]
-
-    # Append the query with a WHERE clause if the ufo option is greater than 0
-    if len(ufo_option) > 0:
-        query += " AND UFO_shape IN ({})".format(','.join(['?']*len(ufo_option)))
-        params.extend(ufo_option)
-
-    # Append the query with a WHERE clause if the season option is greater than 0
-    if len(season) > 0:
-        query += " AND Season IN ({})".format(','.join(['?']*len(season)))
-        params.extend(season)
-
-    # Parse a dataframe using the combined sql query
-    df = pd.read_sql_query(query, db_connection, params=params)
-
-    # Close the database connection
-    db_connection.close()
-    
-    return df
-
-@st.cache_resource(show_spinner=False)
-def display_table(df):
-    
-    # Display the data on a table
-    st.dataframe(df[[col for col in df if col not in ['Text']]], use_container_width=True)
-
 def main():
 
     # Create the page and add titles
@@ -144,36 +60,88 @@ def main():
     # Hide the spinner at the top of the page
     st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 
-    # Load initial variables
-    year_min, year_max, hour_min, hour_max, seasons, ufo_shape = get_variables()
-
-    # Define the range of years for the multi-slider
-    range_years = st.sidebar.slider("Select Year Range", year_min, year_max, (year_min, year_max), 1)
-
-    # Define Hours Range
-    range_hours = st.sidebar.slider("Select Hour Range", hour_min, hour_max, (hour_min, hour_max), 1)
-
-    # Multi-Select UFO Shape
-    ufo_option = st.sidebar.multiselect(label='Select UFO Shape', options=ufo_shape)
+    view = st.sidebar.selectbox(label='Select View', options=['Map', 'Chart', 'Table'], index=0)
     
-    # Multi-Select Season
-    season = st.sidebar.multiselect(label='Select Season', options=seasons)
+    # Controls title
+    st.sidebar.title("Controls")
+
+    # Load initial variables
+    year_min, year_max, hour_min, hour_max = get_variables()
+    
+    with st.sidebar.container():
+
+        if view == 'Map':
+
+            # Select chart type dropdown
+            chart_type = st.selectbox(label="Select Chart Type", options=("Choropleth", "Markers"), index=0)
+
+        st.header("Range Filters")
+
+        # Define the range of years for the multi-slider
+        range_years = st.slider("Select Year Range", year_min, year_max, (year_min, year_max), 1)
+
+        # Define Hours Range
+        range_hours = st.slider("Select Hour Range", hour_min, hour_max, (hour_min, hour_max), 1)
+
+        st.header("Country Selection")
+
+        # Get country lists based on year and hour ranges
+        countries, countries_ranked = get_country_dropdowns(range_years[0], range_years[1], range_hours[0], range_hours[1])
+
+        # Multi-select countries
+        country_incl = st.multiselect(label='Select Countries to Include', options=countries)
+
+        # Multi-Select countries to exclude -> Ordered by countries with highest counts
+        country_excl = st.multiselect(label='Select Countries to Exclude', options=countries_ranked)
+
+        st.header("Additional Filters")
+
+        # Get the seasons and ufo_shape lists based on the year and hour ranges
+        seasons, ufo_shape = get_dependent_dropdowns(range_years[0], range_years[1], range_hours[0], range_hours[1], country_incl, country_excl)
+
+        # Multi-Select UFO Shape
+        ufo_option = st.multiselect(label='Select UFO Shape', options=ufo_shape)
+        
+        # Multi-Select Season
+        season = st.multiselect(label='Select Season', options=seasons)
 
     # Filter the data based on the selections
-    df = filter_data(range_years, ufo_option, season, range_hours)
+    df = filter_data(range_years, ufo_option, season, range_hours, country_incl, country_excl)
 
-    # Display count of sightings
-    st.sidebar.metric('Count Sightings', value=df.shape[0])
+    with st.sidebar.container():
+        # Display count of sightings
+        st.metric('Count Sightings', value=df.shape[0])
 
-    # URL links to external sites
-    st.sidebar.write("[Buy me a coffee](https://www.buymeacoffee.com/jon.wright)")
-    st.sidebar.write("[GitHub](https://github.com/jonwright13/ufo-sightings)")
+    with st.sidebar.container():
+        # URL links to external sites
+        st.write("[Buy me a coffee](https://www.buymeacoffee.com/jon.wright)")
+        st.write("[GitHub](https://github.com/jonwright13/ufo-sightings)")
 
-    # Generate the map
-    get_map(df)
+    if view == 'Map':
 
-    # Display the table of data
-    display_table(df)
+        st.dataframe(pd.DataFrame(df['Country'].value_counts()).T, height=80)
+        get_map(df, tile=chart_type)    # Generate the map
+
+    elif view == 'Chart':
+
+        col1, col2 = st.columns(2)
+        col1.write("Sightings per Year")
+        col1.line_chart(df['Year'].value_counts())
+        col2.write("Sightings per Month")
+        col2.line_chart(df['Month'].value_counts())
+
+        country_chart_selection = col1.selectbox(label="Select Top or Bottom 10 Countries", options=["Top 10", "Bottom 10"])
+        col1.pyplot(ten_countries(df, country_chart_selection))
+        
+        ufo_chart_selection = col2.selectbox(label="Select Top or Bottom 10 UFO Shapes", options=["Top 10", "Bottom 10"])
+        col2.pyplot(ten_ufos(df, ufo_chart_selection))
+
+        col1.pyplot(ufo_dist_by_season(df))
+        col2.pyplot(season_pie_chart(df))
+
+    elif view == 'Table':
+        
+        display_table(df) # Display the table of data
 
 if __name__ == "__main__":
     main()
