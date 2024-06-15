@@ -9,4 +9,4 @@ Original dataset was based on [this dataset](https://www.kaggle.com/datasets/cam
 - Filters on datetime, countries, seasons, and UFO type
 
 Application: [UFO Sightings App](http://ufo-sightings.streamlit.app/)
-Geocode API Address Fix Script: [GitHub](https://github.com/jonwright13/geo-locate)
+<br>Geocode API Address Fix Script: [GitHub](https://github.com/jonwright13/geo-locate)
